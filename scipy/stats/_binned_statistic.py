@@ -1,8 +1,9 @@
 import numpy as np
+import numpy.ma as ma
 
 
 def binned_statistic(x, values, statistic='mean',
-                     bins=10, range=None):
+                     bins=10, range=None, mask_invalid=False):
     """
     Compute a binned statistic for a set of data.
 
@@ -46,6 +47,11 @@ def binned_statistic(x, values, statistic='mean',
         is simply ``(x.min(), x.max())``.  Values outside the range are
         ignored.
 
+    mask_invalid : bool, optional
+        If True, invalid entries of the ``values`` array will be masked before
+        the computation. Also, the returned ``statistic`` array will be a
+        masked array, with NaN masked.
+
     Returns
     -------
     statistic : array
@@ -88,7 +94,7 @@ def binned_statistic(x, values, statistic='mean',
 
 
 def binned_statistic_2d(x, y, values, statistic='mean',
-                        bins=10, range=None):
+                        bins=10, range=None, mask_invalid=False):
     """
     Compute a bidimensional binned statistic for a set of data.
 
@@ -138,6 +144,11 @@ def binned_statistic_2d(x, y, values, statistic='mean',
         [[xmin, xmax], [ymin, ymax]]. All values outside of this range will be
         considered outliers and not tallied in the histogram.
 
+    mask_invalid : bool, optional
+        If True, invalid entries of the ``values`` array will be masked before
+        the computation. Also, the returned ``statistic`` array will be a
+        masked array, with NaN masked.
+
     Returns
     -------
     statistic : ndarray, shape(nx, ny)
@@ -169,7 +180,7 @@ def binned_statistic_2d(x, y, values, statistic='mean',
 
 
 def binned_statistic_dd(sample, values, statistic='mean',
-                        bins=10, range=None):
+                        bins=10, range=None, mask_invalid=False):
     """
     Compute a multidimensional binned statistic for a set of data.
 
@@ -216,6 +227,11 @@ def binned_statistic_dd(sample, values, statistic='mean',
         not given explicitely in `bins`. Defaults to the minimum and maximum
         values along each dimension.
 
+    mask_invalid : bool, optional
+        If True, invalid entries of the ``values`` array will be masked before
+        the computation. Also, the returned ``statistic`` array will be a
+        masked array, with NaN masked.
+
     Returns
     -------
     statistic : ndarray, shape(nx1, nx2, nx3,...)
@@ -235,6 +251,29 @@ def binned_statistic_dd(sample, values, statistic='mean',
         pass
     else:
         raise ValueError("statistic not understood")
+
+    if mask_invalid:
+        values = ma.masked_invalid(values)
+
+    _input_fully_masked = False
+    if isinstance(values, ma.core.MaskedArray):
+        if isinstance(values.mask, (bool, np.bool_)):
+            if values.mask == False:
+                values = values.data
+            elif values.mask == True:
+                _input_fully_masked = True
+        elif (1 - values.mask).all() == True:
+            values = values.data
+        elif values.mask.all() == True:
+            _input_fully_masked = True
+        else:
+            _shape = values.shape
+            if values.ndim == 1:
+                values = ma.atleast_2d(values).T
+            validx = np.where(values.mask.sum(axis=1) == 0)[0]
+            sample = sample[validx]
+            _shape = np.r_[validx.shape[0], _shape[1:]]
+            values = values[validx].data.reshape(_shape)
 
     # This code is based on np.histogramdd
     try:
@@ -285,6 +324,11 @@ def binned_statistic_dd(sample, values, statistic='mean',
         dedges[i] = np.diff(edges[i])
 
     nbin = np.asarray(nbin)
+
+    # if ``values`` was fully masked, return here
+    if _input_fully_masked == True:
+        print ma.masked_all(tuple(nbin - 2)).shape
+        return ma.masked_all(tuple(nbin - 2)), edges
 
     # Compute the bin number each sample falls into.
     Ncount = {}
@@ -357,4 +401,6 @@ def binned_statistic_dd(sample, values, statistic='mean',
 
     if (result.shape != nbin - 2).any():
         raise RuntimeError('Internal Shape Error')
+    if mask_invalid:
+        result = ma.masked_invalid(result)
     return result, edges
