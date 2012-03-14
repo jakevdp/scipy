@@ -87,10 +87,10 @@ def binned_statistic(x, values, statistic='mean',
     if N != 1:
         bins = [np.asarray(bins, float)]
 
-    medians, edges = binned_statistic_dd([x], values, statistic,
+    result, edges = binned_statistic_dd([x], values, statistic,
                                          bins, range)
 
-    return medians, edges[0]
+    return result, edges[0]
 
 
 def binned_statistic_2d(x, y, values, statistic='mean',
@@ -173,10 +173,10 @@ def binned_statistic_2d(x, y, values, statistic='mean',
         xedges = yedges = np.asarray(bins, float)
         bins = [xedges, yedges]
 
-    medians, edges = binned_statistic_dd([x, y], values, statistic,
+    result, edges = binned_statistic_dd([x, y], values, statistic,
                                          bins, range)
 
-    return medians, edges[0], edges[1]
+    return result, edges[0], edges[1]
 
 
 def binned_statistic_dd(sample, values, statistic='mean',
@@ -271,7 +271,10 @@ def binned_statistic_dd(sample, values, statistic='mean',
             if values.ndim == 1:
                 values = ma.atleast_2d(values).T
             validx = np.where(values.mask.sum(axis=1) == 0)[0]
-            sample = sample[validx]
+            if isinstance(sample, list):
+                sample = np.asarray(sample)[:,validx].tolist()
+            else:
+                sample = sample[validx]
             _shape = np.r_[validx.shape[0], _shape[1:]]
             values = values[validx].data.reshape(_shape)
 
