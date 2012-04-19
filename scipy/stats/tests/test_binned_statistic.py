@@ -9,7 +9,7 @@ from scipy.stats import \
     binned_statistic, binned_statistic_2d, binned_statistic_dd
 
 
-class TestUnivariateSpline(TestCase):
+class TestBinnedStatistic(TestCase):
     def test_1d_count(self):
         x = np.random.random(100)
         v = np.random.random(100)
@@ -211,8 +211,8 @@ class TestUnivariateSpline(TestCase):
         sum3, edges3 = binned_statistic_dd(X, v, 'count', bins=bins)
         verify3 = np.zeros((4,4,4))
         verify3[0,0,0] = 2
-        verify3[1,1,1] = 1
-        verify3[2,2,2] = 1
+        verify3[1,1,1] = 2
+        verify3[2,2,2] = 2
         verify3[3,3,3] = 1
         assert_array_almost_equal_ma(sum3, verify3)
         sum4, edges4 = binned_statistic_dd(X, v, 'sum', bins=bins)

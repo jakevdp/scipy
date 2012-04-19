@@ -196,7 +196,7 @@ def binned_statistic_dd(sample, values, statistic='mean',
         as an (N,D) array.
     values : array_like
         The values on which the statistic will be computed.  This must be
-        the same shape as x.
+        1d with length N.
     statistic : string or callable, optional
         The statistic to compute (default is 'mean').
         The following statistics are available:
@@ -252,32 +252,6 @@ def binned_statistic_dd(sample, values, statistic='mean',
     else:
         raise ValueError("statistic not understood")
 
-    if mask_invalid:
-        values = ma.masked_invalid(values)
-
-    _input_fully_masked = False
-    if isinstance(values, ma.core.MaskedArray):
-        if isinstance(values.mask, (bool, np.bool_)):
-            if values.mask == False:
-                values = values.data
-            elif values.mask == True:
-                _input_fully_masked = True
-        elif (1 - values.mask).all() == True:
-            values = values.data
-        elif values.mask.all() == True:
-            _input_fully_masked = True
-        else:
-            _shape = values.shape
-            if values.ndim == 1:
-                values = ma.atleast_2d(values).T
-            validx = np.where(values.mask.sum(axis=1) == 0)[0]
-            if isinstance(sample, list):
-                sample = np.asarray(sample)[:,validx].tolist()
-            else:
-                sample = sample[validx]
-            _shape = np.r_[validx.shape[0], _shape[1:]]
-            values = values[validx].data.reshape(_shape)
-
     # This code is based on np.histogramdd
     try:
         # Sample is an ND-array.
@@ -328,11 +302,6 @@ def binned_statistic_dd(sample, values, statistic='mean',
 
     nbin = np.asarray(nbin)
 
-    # if ``values`` was fully masked, return here
-    if _input_fully_masked == True:
-        print ma.masked_all(tuple(nbin - 2)).shape
-        return ma.masked_all(tuple(nbin - 2)), edges
-
     # Compute the bin number each sample falls into.
     Ncount = {}
     for i in np.arange(D):
@@ -361,13 +330,27 @@ def binned_statistic_dd(sample, values, statistic='mean',
 
     result = np.empty(nbin.prod(), float)
 
+    if mask_invalid:
+        values = ma.masked_invalid(values)
+
+    validx = np.arange(N)
+    if isinstance(values, ma.core.MaskedArray):
+        if isinstance(values.mask, (bool, np.bool_)):
+            if values.mask == True:
+                validx = []
+        elif values.mask.all() == True:
+            validx = []
+        else:
+            validx = np.where(values.mask == False)[0]
+
     if statistic == 'mean':
         result.fill(np.nan)
-        flatcount = np.bincount(xy, None)
-        flatsum = np.bincount(xy, values)
-        a = np.arange(len(flatcount))
-        result[a] = flatsum
-        result[a] /= flatcount
+        if len(validx) > 0:
+            flatcount = np.bincount(xy[validx], None)
+            flatsum = np.bincount(xy[validx], values[validx])
+            a = np.arange(len(flatcount))
+            result[a] = flatsum
+            result[a] /= flatcount
     elif statistic == 'count':
         result.fill(0)
         flatcount = np.bincount(xy, None)
@@ -375,13 +358,18 @@ def binned_statistic_dd(sample, values, statistic='mean',
         result[a] = flatcount
     elif statistic == 'sum':
         result.fill(0)
-        flatsum = np.bincount(xy, values)
-        a = np.arange(len(flatsum))
-        result[a] = flatsum
+        if len(validx) > 0:
+            flatsum = np.bincount(xy[validx], values[validx])
+            a = np.arange(len(flatsum))
+            result[a] = flatsum
     elif statistic == 'median':
+        if isinstance(values, ma.core.MaskedArray):
+            _medfunc = ma.median
+        else:
+            _medfunc = np.median
         result.fill(np.nan)
         for i in np.unique(xy):
-            result[i] = np.median(values[xy == i])
+            result[i] = _medfunc(values[xy == i])
     elif callable(statistic):
         try:
             null = statistic([])
